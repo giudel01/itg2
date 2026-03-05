@@ -1,8 +1,33 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<j:jelly trim="false"
+  xmlns:j="jelly:core"
+  xmlns:g="glide"
+  xmlns:g2="can_beat"
+  xmlns:j2="null">
+
 <!--
   ServiceNow UI Page – Risk Assessment Custom
   Table: u_risk_assessment_custom
-  URL:   /<page>.do?sys_id=<record_sys_id>
+  URL:   risk_assessment_form.do?sys_id=<record_sys_id>
 -->
+
+<!-- ── Server-side: load record ── -->
+<g2:evaluate var="jvar_record" jelly="true">
+  var sysId = RP.getParameterValue('sys_id');
+  var out   = { ok: false, impatto: '', probabilita: '', rischio: '', number: '' };
+  if (sysId) {
+    var gr = new GlideRecord('u_risk_assessment_custom');
+    if (gr.get(sysId)) {
+      out.ok          = true;
+      out.impatto     = gr.getValue('u_impatto_inerente231')     || '';
+      out.probabilita = gr.getValue('u_probabilita_inerente231') || '';
+      out.rischio     = gr.getValue('u_rischio_inerente')        || '';
+      out.number      = gr.getValue('number')                    || '';
+    }
+  }
+  answer = JSON.stringify(out);
+</g2:evaluate>
+
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
@@ -11,6 +36,9 @@
   <link rel="stylesheet" href="38cc377393533690aa1874121bba1014.cssdbx" />
 </head>
 <body>
+
+<!-- Inject server data before JS runs -->
+<script>var RECORD = $[jvar_record];</script>
 
 <div class="page">
 
@@ -28,17 +56,12 @@
 
   <div class="card">
 
-    <div id="loadingBox" class="loading-box">
-      <div class="spinner"></div>
-      <p>Caricamento…</p>
-    </div>
-
     <div id="riskForm">
 
       <div class="field" id="wrapImpatto">
         <label for="selImpatto">Impatto Inerente 231 <span class="req">*</span></label>
-        <select id="selImpatto" name="u_impatto_inerente231">
-          <option value="" disabled="true" selected="true">— Seleziona —</option>
+        <select id="selImpatto">
+          <option value="">— Seleziona —</option>
           <option value="basso">Basso</option>
           <option value="medio">Medio</option>
           <option value="alto">Alto</option>
@@ -48,8 +71,8 @@
 
       <div class="field" id="wrapProbabilita">
         <label for="selProbabilita">Probabilità Inerente 231 <span class="req">*</span></label>
-        <select id="selProbabilita" name="u_probabilita_inerente231">
-          <option value="" disabled="true" selected="true">— Seleziona —</option>
+        <select id="selProbabilita">
+          <option value="">— Seleziona —</option>
           <option value="basso">Bassa</option>
           <option value="medio">Media</option>
           <option value="alto">Alta</option>
@@ -64,7 +87,7 @@
 
       <div class="actions">
         <button type="button" id="btnReset" class="btn btn-secondary">Annulla modifiche</button>
-        <button type="button" id="btnSave" class="btn btn-primary">Salva</button>
+        <button type="button" id="btnSave"  class="btn btn-primary">Salva</button>
       </div>
 
     </div>
@@ -74,3 +97,4 @@
 <script src="risk_assessment_form.js.jsdbx"></script>
 </body>
 </html>
+</j:jelly>
