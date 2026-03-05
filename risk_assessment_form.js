@@ -1,382 +1,171 @@
-/**
- * risk_assessment.js
- *
- * ServiceNow UI Page – Risk Assessment Custom
- * Table  : u_risk_assessment_custom
- * Fields : u_impatto_inerente231 | u_probabilita_inerente231 | u_rischio_inerente
- *
- * Usage  : The page URL must include ?sys_id=<record_sys_id>
- *          e.g. /u_risk_assessment_custom.do?sys_id=abc123...
- *          or   /<ui_page_name>.do?sysparm_record_sys_id=abc123...
- *
- * The script reads the sys_id from the URL query string (keys: sys_id or sysparm_record_sys_id),
- * loads the existing record via the ServiceNow Table REST API, and allows the user to save.
- */
-
 (function () {
   'use strict';
 
-  /* ─────────────────────────────────────────
-     CONSTANTS
-  ───────────────────────────────────────── */
-  var TABLE      = 'u_risk_assessment_custom';
-  var API_BASE   = '/api/now/table/' + TABLE;
-  var FIELDS     = 'u_impatto_inerente231,u_probabilita_inerente231,u_rischio_inerente,number,sys_created_on';
+  var TABLE  = 'u_risk_assessment_custom';
+  var API    = '/api/now/table/' + TABLE + '/';
+  var FIELDS = 'u_impatto_inerente231,u_probabilita_inerente231,u_rischio_inerente,number';
 
-  /**
-   * Risk matrix: rischio = f(impatto, probabilita)
-   *
-   *            | basso | medio | alto  |  ← Probabilità
-   *  ----------+-------+-------+-------+
-   *  alto  Imp | medio | alto  | alto  |
-   *  medio Imp | basso | medio | alto  |
-   *  basso Imp | basso | basso | medio |
-   */
-  var RISK_MATRIX = {
+  var MATRIX = {
     alto:  { alto: 'alto',  medio: 'alto',  basso: 'medio' },
     medio: { alto: 'alto',  medio: 'medio', basso: 'basso' },
     basso: { alto: 'medio', medio: 'basso', basso: 'basso' }
   };
 
-  /* ─────────────────────────────────────────
-     STATE
-  ───────────────────────────────────────── */
-  var state = {
-    sysId:         null,
-    originalData:  null,   // data as loaded from server
-    saving:        false
-  };
+  var sysId       = null;
+  var savedData   = null;
+  var saving      = false;
 
-  /* ─────────────────────────────────────────
-     DOM REFERENCES
-  ───────────────────────────────────────── */
-  var dom = {};
+  /* ── DOM ── */
+  var elImpatto     = document.getElementById('selImpatto');
+  var elProbabilita = document.getElementById('selProbabilita');
+  var elRisk        = document.getElementById('riskResult');
+  var elForm        = document.getElementById('riskForm');
+  var elBtnSave     = document.getElementById('btnSave');
+  var elBtnReset    = document.getElementById('btnReset');
+  var elErrBanner   = document.getElementById('alertError');
+  var elErrMsg      = document.getElementById('alertErrorMsg');
+  var elOkBanner    = document.getElementById('alertSuccess');
+  var elLoading     = document.getElementById('loadingBox');
+  var elRecordLabel = document.getElementById('recordLabel');
+  var wrapImpatto   = document.getElementById('wrapImpatto');
+  var wrapProb      = document.getElementById('wrapProbabilita');
+  var errImpatto    = document.getElementById('errImpatto');
+  var errProb       = document.getElementById('errProbabilita');
 
-  function cacheDom() {
-    dom.loadingOverlay   = document.getElementById('loadingOverlay');
-    dom.errorBanner      = document.getElementById('errorBanner');
-    dom.errorMessage     = document.getElementById('errorMessage');
-    dom.successBanner    = document.getElementById('successBanner');
-    dom.headerSubtitle   = document.getElementById('headerSubtitle');
-    dom.headerMeta       = document.getElementById('headerMeta');
-    dom.riskForm         = document.getElementById('riskForm');
-    dom.selectImpatto    = document.getElementById('selectImpatto');
-    dom.selectProbabilita= document.getElementById('selectProbabilita');
-    dom.riskDisplay      = document.getElementById('riskDisplay');
-    dom.riskDot          = document.getElementById('riskDot');
-    dom.riskValue        = document.getElementById('riskValue');
-    dom.btnSave          = document.getElementById('btnSave');
-    dom.btnReset         = document.getElementById('btnReset');
-    dom.fieldImpatto     = document.getElementById('fieldImpatto');
-    dom.fieldProbabilita = document.getElementById('fieldProbabilita');
-    dom.errorImpatto     = document.getElementById('errorImpatto');
-    dom.errorProbabilita = document.getElementById('errorProbabilita');
-    dom.matrixCells      = document.querySelectorAll('.ra-matrix__cell[data-i]');
-  }
-
-  /* ─────────────────────────────────────────
-     UTILITY – URL PARAMS
-  ───────────────────────────────────────── */
+  /* ── Helpers ── */
   function getSysId() {
-    var params = new URLSearchParams(window.location.search);
-    return params.get('sys_id') || params.get('sysparm_record_sys_id') || null;
+    var p = new URLSearchParams(window.location.search);
+    return p.get('sys_id') || p.get('sysparm_record_sys_id') || null;
   }
 
-  /* ─────────────────────────────────────────
-     UTILITY – HTTP
-  ───────────────────────────────────────── */
-  function request(method, url, body) {
+  function ajax(method, url, body) {
     return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
       xhr.open(method, url, true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.setRequestHeader('Accept', 'application/json');
-
       xhr.onload = function () {
         if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(JSON.parse(xhr.responseText));
-          } catch (e) {
-            resolve({});
-          }
+          resolve(JSON.parse(xhr.responseText || '{}'));
         } else {
           var msg = 'Errore HTTP ' + xhr.status;
-          try {
-            var errBody = JSON.parse(xhr.responseText);
-            if (errBody && errBody.error && errBody.error.message) {
-              msg = errBody.error.message;
-            }
-          } catch (e) { /* ignore */ }
+          try { msg = JSON.parse(xhr.responseText).error.message || msg; } catch (e) {}
           reject(new Error(msg));
         }
       };
-
-      xhr.onerror = function () {
-        reject(new Error('Errore di rete. Verificare la connessione.'));
-      };
-
+      xhr.onerror = function () { reject(new Error('Errore di rete.')); };
       xhr.send(body ? JSON.stringify(body) : null);
     });
   }
 
-  /* ─────────────────────────────────────────
-     LOADING / ERROR STATE HELPERS
-  ───────────────────────────────────────── */
-  function showLoading(visible) {
-    dom.loadingOverlay.hidden = !visible;
+  function calcRisk(i, p) {
+    return (MATRIX[i] && MATRIX[i][p]) || null;
+  }
+
+  function setRiskDisplay(risk) {
+    elRisk.className = 'risk-result ' + (risk ? 'risk-' + risk : 'risk-empty');
+    elRisk.textContent = risk ? (risk.charAt(0).toUpperCase() + risk.slice(1)) : '—';
   }
 
   function showError(msg) {
-    dom.errorMessage.textContent = msg;
-    dom.errorBanner.hidden = false;
-    dom.successBanner.hidden = true;
-    dom.errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    elErrMsg.textContent = msg;
+    elErrBanner.style.display = 'block';
+    elOkBanner.style.display  = 'none';
   }
 
-  function hideError() {
-    dom.errorBanner.hidden = true;
+  function clearMessages() {
+    elErrBanner.style.display = 'none';
+    elOkBanner.style.display  = 'none';
   }
 
-  function showSuccess() {
-    dom.successBanner.hidden = false;
-    dom.errorBanner.hidden = true;
-    dom.successBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setTimeout(function () { dom.successBanner.hidden = true; }, 4000);
+  function setLoading(on) {
+    elLoading.style.display = on ? 'flex' : 'none';
   }
 
-  /* ─────────────────────────────────────────
-     RISK CALCULATION
-  ───────────────────────────────────────── */
-  function calculateRisk(impatto, probabilita) {
-    if (!impatto || !probabilita) return null;
-    return (RISK_MATRIX[impatto] && RISK_MATRIX[impatto][probabilita]) || null;
+  function populate(data) {
+    var i = (data.u_impatto_inerente231     || '').toLowerCase();
+    var p = (data.u_probabilita_inerente231 || '').toLowerCase();
+    if (i) elImpatto.value     = i;
+    if (p) elProbabilita.value = p;
+    setRiskDisplay(calcRisk(i, p));
+    if (data.number) elRecordLabel.textContent = data.number;
   }
 
-  function updateRiskDisplay(risk) {
-    // Remove previous colour classes
-    dom.riskDisplay.classList.remove('ra-risk-display--alto', 'ra-risk-display--medio', 'ra-risk-display--basso');
-    dom.riskDot.classList.remove('ra-risk-display__dot--alto', 'ra-risk-display__dot--medio', 'ra-risk-display__dot--basso');
-
-    if (!risk) {
-      dom.riskValue.textContent = '—';
-      return;
-    }
-
-    var label = risk.charAt(0).toUpperCase() + risk.slice(1);
-    dom.riskValue.textContent = label;
-    dom.riskDisplay.classList.add('ra-risk-display--' + risk);
-    dom.riskDot.classList.add('ra-risk-display__dot--' + risk);
-  }
-
-  function highlightMatrixCell(impatto, probabilita) {
-    dom.matrixCells.forEach(function (cell) {
-      cell.classList.toggle(
-        'ra-matrix__cell--active',
-        cell.dataset.i === impatto && cell.dataset.p === probabilita
-      );
-    });
-  }
-
-  function onSelectionChange() {
-    var impatto     = dom.selectImpatto.value;
-    var probabilita = dom.selectProbabilita.value;
-    var risk        = calculateRisk(impatto, probabilita);
-
-    updateRiskDisplay(risk);
-    highlightMatrixCell(impatto, probabilita);
-
-    // Clear inline errors on change
-    if (impatto)     setFieldError(dom.fieldImpatto,     dom.errorImpatto,     false);
-    if (probabilita) setFieldError(dom.fieldProbabilita, dom.errorProbabilita, false);
-  }
-
-  /* ─────────────────────────────────────────
-     FORM POPULATION
-  ───────────────────────────────────────── */
-  function populateForm(data) {
-    var impatto     = (data.u_impatto_inerente231     || '').toLowerCase();
-    var probabilita = (data.u_probabilita_inerente231 || '').toLowerCase();
-
-    if (impatto)     dom.selectImpatto.value     = impatto;
-    if (probabilita) dom.selectProbabilita.value = probabilita;
-
-    onSelectionChange();
-
-    // Header subtitle
-    if (data.number) {
-      dom.headerSubtitle.textContent = 'Numero record: ' + data.number;
-    } else {
-      dom.headerSubtitle.textContent = 'Record: ' + state.sysId;
-    }
-
-    // Header meta (creation date)
-    if (data.sys_created_on) {
-      var d = new Date(data.sys_created_on.replace(' ', 'T'));
-      dom.headerMeta.textContent = 'Creato il ' + d.toLocaleDateString('it-IT', {
-        day: '2-digit', month: 'long', year: 'numeric'
-      });
-    }
-  }
-
-  /* ─────────────────────────────────────────
-     LOAD RECORD
-  ───────────────────────────────────────── */
-  function loadRecord() {
-    showLoading(true);
-    hideError();
-
-    var url = API_BASE + '/' + state.sysId + '?sysparm_fields=' + FIELDS;
-
-    return request('GET', url)
-      .then(function (response) {
-        var data = response.result || {};
-        state.originalData = data;
-        populateForm(data);
-      })
-      .catch(function (err) {
-        showError('Impossibile caricare il record: ' + err.message);
-        dom.headerSubtitle.textContent = 'Errore durante il caricamento';
-      })
-      .finally(function () {
-        showLoading(false);
-      });
-  }
-
-  /* ─────────────────────────────────────────
-     VALIDATION
-  ───────────────────────────────────────── */
-  function setFieldError(fieldEl, errorEl, hasError) {
-    fieldEl.classList.toggle('ra-field--invalid', hasError);
-    errorEl.hidden = !hasError;
+  /* ── Events ── */
+  function onChange() {
+    setRiskDisplay(calcRisk(elImpatto.value, elProbabilita.value));
+    if (elImpatto.value)     { wrapImpatto.classList.remove('field--invalid'); errImpatto.style.display = 'none'; }
+    if (elProbabilita.value) { wrapProb.classList.remove('field--invalid');    errProb.style.display    = 'none'; }
   }
 
   function validate() {
-    var valid       = true;
-    var impatto     = dom.selectImpatto.value;
-    var probabilita = dom.selectProbabilita.value;
-
-    setFieldError(dom.fieldImpatto, dom.errorImpatto, !impatto);
-    setFieldError(dom.fieldProbabilita, dom.errorProbabilita, !probabilita);
-
-    if (!impatto || !probabilita) valid = false;
-    return valid;
+    var ok = true;
+    if (!elImpatto.value)     { wrapImpatto.classList.add('field--invalid'); errImpatto.style.display = 'block'; ok = false; }
+    if (!elProbabilita.value) { wrapProb.classList.add('field--invalid');    errProb.style.display    = 'block'; ok = false; }
+    return ok;
   }
 
-  /* ─────────────────────────────────────────
-     SAVE RECORD
-  ───────────────────────────────────────── */
-  function saveRecord() {
-    if (state.saving) return;
-    hideError();
+  function onSave(e) {
+    e.preventDefault();
+    if (saving || !validate()) return;
+    clearMessages();
 
-    if (!validate()) {
-      showError('Compilare tutti i campi obbligatori prima di salvare.');
-      return;
-    }
+    var i = elImpatto.value;
+    var p = elProbabilita.value;
 
-    var impatto     = dom.selectImpatto.value;
-    var probabilita = dom.selectProbabilita.value;
-    var rischio     = calculateRisk(impatto, probabilita);
+    saving = true;
+    elBtnSave.disabled = true;
 
-    var payload = {
-      u_impatto_inerente231:     impatto,
-      u_probabilita_inerente231: probabilita,
-      u_rischio_inerente:        rischio || ''
-    };
-
-    state.saving = true;
-    dom.btnSave.disabled = true;
-    dom.btnSave.classList.add('ra-btn--loading');
-
-    var url = API_BASE + '/' + state.sysId;
-
-    request('PATCH', url, payload)
-      .then(function (response) {
-        var updated = (response && response.result) || {};
-        state.originalData = Object.assign({}, state.originalData, updated);
-        showSuccess();
-      })
-      .catch(function (err) {
-        showError('Salvataggio non riuscito: ' + err.message);
-      })
-      .finally(function () {
-        state.saving = false;
-        dom.btnSave.disabled = false;
-        dom.btnSave.classList.remove('ra-btn--loading');
-      });
+    ajax('PATCH', API + sysId, {
+      u_impatto_inerente231:     i,
+      u_probabilita_inerente231: p,
+      u_rischio_inerente:        calcRisk(i, p) || ''
+    })
+    .then(function (res) {
+      savedData = Object.assign({}, savedData, res.result || {});
+      elOkBanner.style.display = 'block';
+      setTimeout(function () { elOkBanner.style.display = 'none'; }, 4000);
+    })
+    .catch(function (err) { showError(err.message); })
+    .finally(function () { saving = false; elBtnSave.disabled = false; });
   }
 
-  /* ─────────────────────────────────────────
-     RESET
-  ───────────────────────────────────────── */
-  function resetForm() {
-    if (!state.originalData) return;
-    populateForm(state.originalData);
-    hideError();
-    dom.successBanner.hidden = true;
-    setFieldError(dom.fieldImpatto,     dom.errorImpatto,     false);
-    setFieldError(dom.fieldProbabilita, dom.errorProbabilita, false);
+  function onReset() {
+    if (savedData) populate(savedData);
+    clearMessages();
+    wrapImpatto.classList.remove('field--invalid');
+    wrapProb.classList.remove('field--invalid');
+    errImpatto.style.display = 'none';
+    errProb.style.display    = 'none';
   }
 
-  /* ─────────────────────────────────────────
-     EVENT BINDING
-  ───────────────────────────────────────── */
-  function bindEvents() {
-    dom.selectImpatto.addEventListener('change', onSelectionChange);
-    dom.selectProbabilita.addEventListener('change', onSelectionChange);
+  /* ── Boot ── */
+  elImpatto.addEventListener('change', onChange);
+  elProbabilita.addEventListener('change', onChange);
+  elForm.addEventListener('submit', onSave);
+  elBtnReset.addEventListener('click', onReset);
 
-    dom.riskForm.addEventListener('submit', function (e) {
-      e.preventDefault();
-      saveRecord();
-    });
+  sysId = getSysId();
 
-    dom.btnReset.addEventListener('click', resetForm);
+  if (!sysId) {
+    setLoading(false);
+    showError('Parametro sys_id mancante nell\'URL.');
+    elBtnSave.disabled  = true;
+    elBtnReset.disabled = true;
+    return;
   }
 
-  /* ─────────────────────────────────────────
-     BOOTSTRAP
-  ───────────────────────────────────────── */
-  function init() {
-    cacheDom();
-    bindEvents();
+  setLoading(true);
+  ajax('GET', API + sysId + '?sysparm_fields=' + FIELDS)
+    .then(function (res) { savedData = res.result || {}; populate(savedData); })
+    .catch(function (err) { showError('Caricamento fallito: ' + err.message); })
+    .finally(function () { setLoading(false); });
 
-    state.sysId = getSysId();
-
-    if (!state.sysId) {
-      showLoading(false);
-      dom.headerSubtitle.textContent = 'Parametro sys_id mancante nell\'URL';
-      showError(
-        'Impossibile avviare il form: il parametro sys_id non è presente nell\'URL. ' +
-        'Accedere alla pagina tramite un record esistente.'
-      );
-      dom.btnSave.disabled   = true;
-      dom.btnReset.disabled  = true;
-      return;
-    }
-
-    loadRecord();
-  }
-
-  /* ─────────────────────────────────────────
-     POLYFILL: Promise.prototype.finally
-     (for older ServiceNow embedded browsers)
-  ───────────────────────────────────────── */
-  if (typeof Promise !== 'undefined' && !Promise.prototype.finally) {
+  /* finally polyfill */
+  if (!Promise.prototype.finally) {
     Promise.prototype.finally = function (fn) {
-      return this.then(
-        function (val) { fn(); return val; },
-        function (err) { fn(); throw err; }
-      );
+      return this.then(function (v) { fn(); return v; }, function (e) { fn(); throw e; });
     };
-  }
-
-  /* ─────────────────────────────────────────
-     KICK OFF
-  ───────────────────────────────────────── */
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
   }
 
 }());
