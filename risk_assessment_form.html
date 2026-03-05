@@ -4,13 +4,11 @@
   xmlns:g="glide"
   xmlns:g2="can_beat"
   xmlns:j2="null">
-
 <!--
   ServiceNow UI Page – Risk Assessment Custom
   Table: u_risk_assessment_custom
   URL:   risk_assessment_form.do?sys_id=<record_sys_id>
 -->
-
 <!-- ── Server-side: load record ── -->
 <g2:evaluate var="jvar_record" jelly="true">
   var sysId = RP.getParameterValue('sys_id');
@@ -27,7 +25,6 @@
   }
   answer = JSON.stringify(out);
 </g2:evaluate>
-
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
@@ -36,28 +33,21 @@
   <link rel="stylesheet" href="38cc377393533690aa1874121bba1014.cssdbx" />
 </head>
 <body>
-
 <!-- Inject server data before JS runs -->
 <script>var RECORD = $[jvar_record];</script>
-
 <div class="page">
-
   <div class="page-header">
     <h1>Risk Assessment Custom</h1>
     <span id="recordLabel"></span>
   </div>
-
   <div id="alertError" class="alert alert-error" style="display:none">
     <span id="alertErrorMsg"></span>
   </div>
   <div id="alertSuccess" class="alert alert-success" style="display:none">
     Record salvato con successo.
   </div>
-
   <div class="card">
-
     <div id="riskForm">
-
       <div class="field" id="wrapImpatto">
         <label for="selImpatto">Impatto Inerente 231 <span class="req">*</span></label>
         <select id="selImpatto">
@@ -68,7 +58,6 @@
         </select>
         <p class="field-error" id="errImpatto" style="display:none">Campo obbligatorio.</p>
       </div>
-
       <div class="field" id="wrapProbabilita">
         <label for="selProbabilita">Probabilità Inerente 231 <span class="req">*</span></label>
         <select id="selProbabilita">
@@ -79,21 +68,17 @@
         </select>
         <p class="field-error" id="errProbabilita" style="display:none">Campo obbligatorio.</p>
       </div>
-
       <div class="field">
         <label>Rischio Inerente <span class="auto-badge">automatico</span></label>
         <div id="riskResult" class="risk-result risk-empty">—</div>
       </div>
-
       <div class="actions">
         <button type="button" id="btnReset" class="btn btn-secondary">Annulla modifiche</button>
         <button type="button" id="btnSave"  class="btn btn-primary">Salva</button>
       </div>
-
     </div>
   </div>
 </div>
-
 <script src="risk_assessment_form.js.jsdbx"></script>
 </body>
 </html>
