@@ -166,11 +166,14 @@
       CONFIG.fields.impatto,
       CONFIG.fields.probabilita,
       CONFIG.fields.rischio,
-      'sys_created_on',
-      'number'
+      'sys_created_on'
     ].join(',');
 
-    var url = apiUrl(CONFIG.mainTable, state.sysId, 'sysparm_fields=' + fields);
+    var url = apiUrl(
+      CONFIG.mainTable,
+      state.sysId,
+      'sysparm_fields=' + fields + '&sysparm_display_value=all'
+    );
 
     apiFetch('GET', url, null,
       function (data) {
@@ -180,21 +183,15 @@
           return;
         }
 
-        // Populate fields
+        // Populate fields — use stored value (lowercase key), fallback to display_value lowercased
         setSelectValue('f-impatto',     getFieldValue(rec, CONFIG.fields.impatto));
         setSelectValue('f-probabilita', getFieldValue(rec, CONFIG.fields.probabilita));
 
         // Header info
-        var info = [];
-        if (rec.number && rec.number.value) info.push(rec.number.value);
-        if (rec.sys_created_on && rec.sys_created_on.display_value) {
-          info.push('Creato il ' + rec.sys_created_on.display_value);
-        }
-        if (info.length) {
-          document.getElementById('ra-record-info').textContent = info.join(' · ');
-        } else {
-          document.getElementById('ra-record-info').textContent = 'sys_id: ' + state.sysId;
-        }
+        var createdOn = rec.sys_created_on && (rec.sys_created_on.display_value || rec.sys_created_on.value);
+        document.getElementById('ra-record-info').textContent = createdOn
+          ? 'Creato il ' + createdOn
+          : 'sys_id: ' + state.sysId;
 
         updateRischioDisplay();
         loadControls();
@@ -210,7 +207,8 @@
   function getFieldValue(rec, fieldName) {
     var field = rec[fieldName];
     if (!field) return '';
-    return (typeof field === 'object') ? (field.value || field.display_value || '') : field;
+    var raw = (typeof field === 'object') ? (field.value || field.display_value || '') : String(field);
+    return raw.trim().toLowerCase();
   }
 
   function setSelectValue(id, value) {
@@ -222,15 +220,11 @@
 
   /* ── LOAD CONTROLS ── */
   function loadControls() {
-    var parentField = CONFIG.fields.m2mParent;
     var url = apiUrl(
       CONFIG.m2mTable, null,
-      'sysparm_query=' + parentField + '=' + state.sysId +
-      '&sysparm_fields=' + [
-        'sys_id',
-        CONFIG.fields.m2mControl,
-        CONFIG.fields.m2mRisultato
-      ].join(',') +
+      'sysparm_query=' + CONFIG.fields.m2mParent + '=' + state.sysId +
+      '&sysparm_fields=sys_id,' + CONFIG.fields.m2mControl + ',' + CONFIG.fields.m2mRisultato +
+      '&sysparm_display_value=all' +
       '&sysparm_limit=100'
     );
 
@@ -245,13 +239,26 @@
         }
 
         state.controls = results.map(function (r) {
-          var controlRef = r[CONFIG.fields.m2mControl];
+          var controlRef    = r[CONFIG.fields.m2mControl];
           var risultatoField = r[CONFIG.fields.m2mRisultato];
+
+          // sys_id can be a plain string or object depending on sysparm_display_value
+          var m2mId = (typeof r.sys_id === 'object') ? r.sys_id.value : r.sys_id;
+
+          // Reference field: display_value = name of the control
+          var controlName = controlRef
+            ? (controlRef.display_value || controlRef.value || 'Controllo')
+            : 'Controllo';
+
+          // Choice field: value = stored key (e.g. "alto")
+          var risultato = risultatoField
+            ? (risultatoField.value || '').trim().toLowerCase()
+            : '';
+
           return {
-            m2mSysId:    r.sys_id.value || r.sys_id,
-            controlSysId: controlRef ? (controlRef.value || '') : '',
-            controlName:  controlRef ? (controlRef.display_value || controlRef.value || 'Controllo') : 'Controllo',
-            risultato:    risultatoField ? (risultatoField.value || risultatoField.display_value || '') : ''
+            m2mSysId:    m2mId,
+            controlName: controlName,
+            risultato:   risultato
           };
         });
 
