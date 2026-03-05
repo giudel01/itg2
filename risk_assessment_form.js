@@ -44,6 +44,10 @@
       xhr.open(method, url, true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.setRequestHeader('Accept', 'application/json');
+      /* ServiceNow CSRF token – must be present on all mutating calls */
+      if (typeof g_ck !== 'undefined') {
+        xhr.setRequestHeader('X-UserToken', g_ck);
+      }
       xhr.onload = function () {
         if (xhr.status >= 200 && xhr.status < 300) {
           resolve(JSON.parse(xhr.responseText || '{}'));
@@ -56,6 +60,12 @@
       xhr.onerror = function () { reject(new Error('Errore di rete.')); };
       xhr.send(body ? JSON.stringify(body) : null);
     });
+  }
+
+  /* ServiceNow REST API returns choice fields as {value, display_value} objects */
+  function fieldVal(v) {
+    if (v && typeof v === 'object') return (v.value || '').toLowerCase();
+    return (v || '').toLowerCase();
   }
 
   function calcRisk(i, p) {
@@ -83,8 +93,8 @@
   }
 
   function populate(data) {
-    var i = (data.u_impatto_inerente231     || '').toLowerCase();
-    var p = (data.u_probabilita_inerente231 || '').toLowerCase();
+    var i = fieldVal(data.u_impatto_inerente231);
+    var p = fieldVal(data.u_probabilita_inerente231);
     if (i) elImpatto.value     = i;
     if (p) elProbabilita.value = p;
     setRiskDisplay(calcRisk(i, p));
