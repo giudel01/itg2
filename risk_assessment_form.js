@@ -70,12 +70,11 @@
     el.className = 'ra-alert ra-alert-' + type;
     el.textContent = msg;
     el.style.display = 'flex';
-    // Auto-hide success after 4s
     if (type === 'success') {
       setTimeout(function () { el.style.display = 'none'; }, 4000);
     }
-    // Scroll to top to show alert
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Scroll within the page — works both standalone and inside ServiceNow iframe
+    try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* ignore */ }
   }
 
   function hideAlert() {
@@ -134,23 +133,33 @@
     xhr.open(method, url, true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.setRequestHeader('Accept', 'application/json');
-    xhr.setRequestHeader('X-UserToken', window.g_ck || '');
+
+    // Set CSRF token only if g_ck is actually available (ServiceNow global)
+    var ck = (typeof g_ck !== 'undefined' && g_ck) ? g_ck
+           : (window.g_ck ? window.g_ck : null);
+    if (ck) {
+      xhr.setRequestHeader('X-UserToken', ck);
+    }
 
     xhr.onreadystatechange = function () {
       if (xhr.readyState !== 4) return;
+
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           var data = JSON.parse(xhr.responseText);
           onSuccess(data);
         } catch (e) {
-          onSuccess({});
+          // Non-JSON response (e.g. redirect to login page)
+          onError('Risposta non valida dal server (possibile redirect al login). HTTP ' + xhr.status);
         }
+      } else if (xhr.status === 0) {
+        onError('Nessuna risposta dal server — verifica la connessione o i permessi.');
       } else {
         var errMsg = 'HTTP ' + xhr.status;
         try {
           var errData = JSON.parse(xhr.responseText);
           if (errData.error && errData.error.message) {
-            errMsg = errData.error.message;
+            errMsg += ' – ' + errData.error.message;
           }
         } catch (e) { /* ignore */ }
         onError(errMsg);
