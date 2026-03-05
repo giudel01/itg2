@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<!--
+  ServiceNow UI Page: Risk Assessment Custom
+  Table: u_risk_assessment_custom
+  Usage: Append ?sys_id=<record_sys_id> to the page URL
+-->
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Risk Assessment</title>
+
+  <!-- ServiceNow default styles (available in UI Page context) -->
+  <link rel="stylesheet" href="risk_assessment.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════
+       HEADER BANNER
+  ════════════════════════════════════════════ -->
+  <header class="ra-header">
+    <div class="ra-header__inner">
+      <div class="ra-header__icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="ra-header__title">Risk Assessment</h1>
+        <p class="ra-header__subtitle" id="headerSubtitle">Caricamento record in corso…</p>
+      </div>
+    </div>
+    <div class="ra-header__meta" id="headerMeta"></div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════
+       MAIN CARD
+  ════════════════════════════════════════════ -->
+  <main class="ra-main">
+
+    <!-- Loading overlay -->
+    <div class="ra-overlay" id="loadingOverlay">
+      <div class="ra-spinner"></div>
+      <p class="ra-overlay__text">Caricamento in corso…</p>
+    </div>
+
+    <!-- Error banner -->
+    <div class="ra-alert ra-alert--error" id="errorBanner" hidden>
+      <svg class="ra-alert__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span id="errorMessage"></span>
+    </div>
+
+    <!-- Success banner -->
+    <div class="ra-alert ra-alert--success" id="successBanner" hidden>
+      <svg class="ra-alert__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      <span>Record aggiornato con successo.</span>
+    </div>
+
+    <!-- ─── FORM CARD ─── -->
+    <section class="ra-card">
+
+      <div class="ra-card__header">
+        <h2 class="ra-card__title">Valutazione del Rischio Inerente 231</h2>
+        <p class="ra-card__description">
+          Seleziona il livello di <strong>Impatto</strong> e di <strong>Probabilità</strong>.
+          Il <em>Rischio Inerente</em> viene calcolato automaticamente.
+        </p>
+      </div>
+
+      <form class="ra-form" id="riskForm" novalidate>
+
+        <!-- ── Impatto Inerente 231 ── -->
+        <div class="ra-field" id="fieldImpatto">
+          <label class="ra-field__label" for="selectImpatto">
+            Impatto Inerente 231
+            <span class="ra-field__required" aria-label="obbligatorio">*</span>
+          </label>
+          <div class="ra-select-wrapper">
+            <select class="ra-select" id="selectImpatto" name="u_impatto_inerente231" required>
+              <option value="" disabled selected>— Seleziona —</option>
+              <option value="basso">Basso</option>
+              <option value="medio">Medio</option>
+              <option value="alto">Alto</option>
+            </select>
+            <svg class="ra-select-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <p class="ra-field__error" id="errorImpatto" hidden>Questo campo è obbligatorio.</p>
+        </div>
+
+        <!-- ── Probabilità Inerente 231 ── -->
+        <div class="ra-field" id="fieldProbabilita">
+          <label class="ra-field__label" for="selectProbabilita">
+            Probabilità Inerente 231
+            <span class="ra-field__required" aria-label="obbligatorio">*</span>
+          </label>
+          <div class="ra-select-wrapper">
+            <select class="ra-select" id="selectProbabilita" name="u_probabilita_inerente231" required>
+              <option value="" disabled selected>— Seleziona —</option>
+              <option value="basso">Bassa</option>
+              <option value="medio">Media</option>
+              <option value="alto">Alta</option>
+            </select>
+            <svg class="ra-select-chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <p class="ra-field__error" id="errorProbabilita" hidden>Questo campo è obbligatorio.</p>
+        </div>
+
+        <!-- ── Rischio Inerente (calcolato) ── -->
+        <div class="ra-field ra-field--readonly">
+          <label class="ra-field__label">
+            Rischio Inerente
+            <span class="ra-field__badge">Calcolato automaticamente</span>
+          </label>
+          <div class="ra-risk-display" id="riskDisplay">
+            <span class="ra-risk-display__dot" id="riskDot"></span>
+            <span class="ra-risk-display__value" id="riskValue">—</span>
+          </div>
+
+          <!-- Risk matrix legend -->
+          <div class="ra-matrix" aria-label="Matrice del rischio">
+            <p class="ra-matrix__title">Matrice di riferimento</p>
+            <div class="ra-matrix__grid">
+              <!-- Header row -->
+              <div class="ra-matrix__cell ra-matrix__cell--corner"></div>
+              <div class="ra-matrix__cell ra-matrix__cell--head">Bassa<br/><small>Prob.</small></div>
+              <div class="ra-matrix__cell ra-matrix__cell--head">Media<br/><small>Prob.</small></div>
+              <div class="ra-matrix__cell ra-matrix__cell--head">Alta<br/><small>Prob.</small></div>
+              <!-- Row: Alto impatto -->
+              <div class="ra-matrix__cell ra-matrix__cell--head">Alto<br/><small>Imp.</small></div>
+              <div class="ra-matrix__cell ra-matrix__cell--medio"  data-i="alto"  data-p="basso">Medio</div>
+              <div class="ra-matrix__cell ra-matrix__cell--alto"   data-i="alto"  data-p="medio">Alto</div>
+              <div class="ra-matrix__cell ra-matrix__cell--alto"   data-i="alto"  data-p="alto">Alto</div>
+              <!-- Row: Medio impatto -->
+              <div class="ra-matrix__cell ra-matrix__cell--head">Medio<br/><small>Imp.</small></div>
+              <div class="ra-matrix__cell ra-matrix__cell--basso"  data-i="medio" data-p="basso">Basso</div>
+              <div class="ra-matrix__cell ra-matrix__cell--medio"  data-i="medio" data-p="medio">Medio</div>
+              <div class="ra-matrix__cell ra-matrix__cell--alto"   data-i="medio" data-p="alto">Alto</div>
+              <!-- Row: Basso impatto -->
+              <div class="ra-matrix__cell ra-matrix__cell--head">Basso<br/><small>Imp.</small></div>
+              <div class="ra-matrix__cell ra-matrix__cell--basso"  data-i="basso" data-p="basso">Basso</div>
+              <div class="ra-matrix__cell ra-matrix__cell--basso"  data-i="basso" data-p="medio">Basso</div>
+              <div class="ra-matrix__cell ra-matrix__cell--medio"  data-i="basso" data-p="alto">Medio</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Actions ── -->
+        <div class="ra-actions">
+          <button type="button" class="ra-btn ra-btn--secondary" id="btnReset">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
+            </svg>
+            Annulla modifiche
+          </button>
+          <button type="submit" class="ra-btn ra-btn--primary" id="btnSave">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+              <polyline points="7 3 7 8 15 8"/>
+            </svg>
+            Salva
+          </button>
+        </div>
+
+      </form>
+    </section>
+
+  </main>
+
+  <script src="risk_assessment.js"></script>
+</body>
+</html>
