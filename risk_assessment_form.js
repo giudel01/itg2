@@ -105,8 +105,7 @@
     return ok;
   }
 
-  function onSave(e) {
-    e.preventDefault();
+  function onSave() {
     if (saving || !validate()) return;
     clearMessages();
 
@@ -142,7 +141,7 @@
   /* ── Boot ── */
   elImpatto.addEventListener('change', onChange);
   elProbabilita.addEventListener('change', onChange);
-  elForm.addEventListener('submit', onSave);
+  elBtnSave.addEventListener('click', onSave);
   elBtnReset.addEventListener('click', onReset);
 
   sysId = getSysId();
