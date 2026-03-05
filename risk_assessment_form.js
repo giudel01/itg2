@@ -17,12 +17,10 @@
        - u_probabilita_inerente (string: alto | medio | basso)
        - u_rischio_inerente    (string: auto-calculated or stored)
 
-   • <m2m table> (e.g. u_risk_assessment_control or similar)
+   • u_m2m_u_risk_asmt_control
        - u_risk_assessment_custom  (reference → u_risk_assessment_custom)
        - u_sn_compliance_control   (reference → sn_compliance_control)
-       - u_risultato               (string / choice)
-
-   Update M2M_TABLE constant below with the actual m2m table name.
+       - u_risultato               (string / choice: alto | medio | basso)
    ============================================================ */
 
 (function () {
@@ -32,8 +30,7 @@
   var CONFIG = {
     mainTable: 'u_risk_assessment_custom',
 
-    /* ⚠ Replace with the real m2m table name in your instance */
-    m2mTable: 'u_risk_assessment_control',
+    m2mTable: 'u_m2m_u_risk_asmt_control',
 
     /* Field names */
     fields: {
