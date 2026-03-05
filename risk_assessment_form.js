@@ -34,8 +34,8 @@
 
     /* Field names */
     fields: {
-      impatto:      'u_impatto_inerente',
-      probabilita:  'u_probabilita_inerente',
+      impatto:      'u_impatto_inerente231',
+      probabilita:  'u_probabilita_inerente231',
       rischio:      'u_rischio_inerente',
       m2mParent:    'u_risk_assessment_custom',
       m2mControl:   'u_sn_compliance_control',
@@ -393,13 +393,15 @@
           setSavingState(false);
 
           if (allOk) {
-            showAlert('Record aggiornato con successo.', 'success');
+            // Reload the page to reflect saved data
+            window.location.reload();
           } else {
             showAlert(
               'Record principale aggiornato, ma alcuni controlli non sono stati salvati: ' +
               errors.join('; '),
               'info'
             );
+            window.location.reload();
           }
         });
       },
